@@ -274,4 +274,95 @@ const Renderer = {
             if (i === question.correct) label = ' ✓ (Correct)';
             if (userAnswer === i && i !== question.correct) label = ' ✕ (Your answer)';
 
-           
+            return `
+                <div class="${classes}">
+                    <span style="font-weight:600;">${letters[i] || (i+1)})</span> ${opt}
+                    <span style="font-weight:600;${i === question.correct ? 'color:var(--success)' : 'color:var(--danger)'}">${label}</span>
+                </div>
+            `;
+        }).join('');
+
+        const settings = Storage.getSettings();
+
+        return `
+            <div class="fade-in">
+                <button class="btn btn-secondary btn-sm" onclick="App.goToView('review')" style="margin-bottom:16px;">
+                    ← Back to all questions
+                </button>
+
+                <div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:16px;">
+                        <h3 style="font-size:1.1rem;font-weight:700;">Question ${idx + 1}</h3>
+                        <span style="padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;${isCorrect ? 'background:var(--success-light);color:var(--success)' : 'background:var(--danger-light);color:var(--danger)'}">
+                            ${isCorrect ? '✓ Correct' : '✕ Incorrect'}
+                        </span>
+                    </div>
+
+                    <p style="font-size:1.05rem;margin-bottom:16px;">${question.question}</p>
+
+                    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;">
+                        ${optionsHtml}
+                    </div>
+
+                    ${settings.showExplanations && question.explanation ? `
+                        <div style="border-top:1px solid var(--border-color);padding-top:16px;">
+                            <h4 style="font-weight:600;margin-bottom:8px;">Explanation</h4>
+                            <p style="color:var(--text-secondary);line-height:1.7;">${question.explanation}</p>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    },
+
+    // ===== Settings Modal =====
+    settingsModal(settings, onToggle, onReset) {
+        const renderToggle = (label, key, value) => `
+            <div class="settings-toggle">
+                <span>${label}</span>
+                <div class="toggle-track ${value ? 'active' : ''}" data-key="${key}" role="button" tabindex="0" aria-label="Toggle ${label}">
+                    <div class="toggle-thumb"></div>
+                </div>
+            </div>
+        `;
+
+        return `
+            <div class="modal">
+                <h2 class="modal-title">⚙️ Settings</h2>
+
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                    ${renderToggle('Shuffle questions', 'shuffleQuestions', settings.shuffleQuestions)}
+                    ${renderToggle('Shuffle choices', 'shuffleChoices', settings.shuffleChoices)}
+                    ${renderToggle('Dark mode', 'darkMode', settings.darkMode)}
+                    ${renderToggle('Show explanations', 'showExplanations', settings.showExplanations)}
+
+                    <div style="border-top:1px solid var(--border-color);padding-top:16px;margin-top:4px;">
+                        <button class="btn btn-danger btn-block" onclick="if(confirm('Reset all saved progress? This action cannot be undone.')) { App.resetAllProgress(); }">
+                            🗑️ Reset saved progress
+                        </button>
+                    </div>
+                </div>
+
+                <button class="btn btn-secondary btn-block" onclick="App.closeSettings()" style="margin-top:16px;">
+                    Close
+                </button>
+            </div>
+        `;
+    },
+
+    // ===== Error =====
+    error(message) {
+        return `
+            <div class="card card-lg text-center" style="max-width:500px;margin:40px auto;border-color:var(--danger);">
+                <div style="font-size:3rem;margin-bottom:12px;">⚠️</div>
+                <h3 style="font-weight:700;margin-bottom:8px;">Error Loading Questions</h3>
+                <p style="color:var(--text-muted);">${message}</p>
+                <button class="btn btn-primary" onclick="location.reload()" style="margin-top:16px;">
+                    🔄 Retry
+                </button>
+            </div>
+        `;
+    }
+};
+
+window.Renderer = Renderer;
