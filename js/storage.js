@@ -40,7 +40,8 @@ const Storage = {
             isAnswered: false,
             isCorrect: null,
             isFinished: false,
-            startTime: Date.now()
+            startTime: Date.now(),
+            view: 'home'
         });
     },
 
@@ -53,5 +54,4 @@ const Storage = {
     }
 };
 
-// Expose for global use
 window.Storage = Storage;
