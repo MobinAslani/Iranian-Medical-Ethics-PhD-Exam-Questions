@@ -21,7 +21,7 @@
     --danger-light: #fef2f2;
     --gray-light: #e2e8f0;
     --transition: 0.2s ease;
-    --max-width: 720px;
+    --max-width: 760px;
 }
 
 [data-theme="dark"] {
@@ -70,10 +70,10 @@ body {
 /* ===== Utilities ===== */
 .hidden { display: none !important; }
 .text-center { text-align: center; }
-.fade-in { animation: fadeIn 0.3s ease-out; }
+.fade-in { animation: fadeIn 0.25s ease-out; }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(8px); }
+    from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
@@ -103,6 +103,7 @@ body {
     gap: 8px;
     text-decoration: none;
     font-family: inherit;
+    user-select: none;
 }
 .btn:disabled {
     opacity: 0.4;
@@ -166,6 +167,7 @@ body {
     font-size: 15px;
     color: var(--text-primary);
     font-family: inherit;
+    user-select: none;
 }
 .set-card:hover {
     border-color: var(--accent);
@@ -225,6 +227,79 @@ body {
     transition: width 0.4s ease;
 }
 
+/* ===== Question Navigator (Bottom Box) ===== */
+.navigator-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+}
+
+.navigator-container .nav-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    font-weight: 500;
+}
+
+.nav-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.nav-btn {
+    width: 36px;
+    height: 36px;
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-card);
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: inherit;
+    user-select: none;
+}
+
+.nav-btn:hover:not(.current) {
+    border-color: var(--accent);
+    background: var(--accent-light);
+    transform: scale(1.05);
+}
+
+.nav-btn.current {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: white;
+    transform: scale(1.08);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+}
+
+.nav-btn.correct {
+    border-color: var(--success);
+    background: var(--success);
+    color: white;
+}
+
+.nav-btn.incorrect {
+    border-color: var(--danger);
+    background: var(--danger);
+    color: white;
+}
+
+.nav-btn.unanswered {
+    border-color: var(--gray-light);
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+}
+
 /* ===== Question Card ===== */
 .question-card {
     background: var(--bg-card);
@@ -281,12 +356,17 @@ body {
     color: var(--text-primary);
     gap: 14px;
     font-family: inherit;
+    user-select: none;
 }
 
 .option-card:hover:not(.disabled) {
     border-color: var(--accent);
     background: var(--bg-card-hover);
     transform: translateX(4px);
+}
+
+.option-card:active:not(.disabled) {
+    transform: scale(0.98);
 }
 
 .option-card .radio {
@@ -308,7 +388,7 @@ body {
     background: var(--accent);
     opacity: 0;
     transform: scale(0);
-    transition: all var(--transition);
+    transition: all 0.15s ease;
 }
 
 .option-card.selected {
@@ -355,18 +435,13 @@ body {
     transform: scale(1);
 }
 
-.option-card.reveal-correct {
-    border-color: var(--success);
-    background: var(--success-light);
-}
-
 .option-card.disabled {
     cursor: default;
     opacity: 0.7;
 }
 
 .option-card.disabled:hover {
-    transform: none;
+    transform: none !important;
     border-color: var(--border-color);
 }
 
@@ -608,6 +683,8 @@ body {
     .check-answer-container .btn { padding: 10px 32px; font-size: 14px; }
     .modal { padding: 16px; margin: 8px; }
     .set-card { padding: 14px 16px; font-size: 14px; }
+    .navigator-container { padding: 12px; }
+    .nav-btn { width: 32px; height: 32px; font-size: 12px; }
 }
 
 @media (max-width: 400px) {
@@ -615,6 +692,7 @@ body {
     .nav-buttons { flex-direction: column; align-items: stretch; }
     .nav-buttons .left { justify-content: center; }
     .nav-buttons .right { justify-content: center; }
+    .nav-btn { width: 28px; height: 28px; font-size: 11px; }
 }
 
 /* ===== Scrollbar ===== */
@@ -647,6 +725,8 @@ body {
 [dir="rtl"] .question-card .question-number { text-align: right; }
 [dir="rtl"] .question-card .question-text { text-align: right; }
 [dir="rtl"] .nav-buttons { direction: rtl; }
+[dir="rtl"] .navigator-container { direction: rtl; }
+[dir="rtl"] .nav-grid { direction: rtl; }
 
 .sr-only {
     position: absolute;
