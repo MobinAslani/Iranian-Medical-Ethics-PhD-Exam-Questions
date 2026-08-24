@@ -1,0 +1,11 @@
+{
+  "sets": [
+    {
+      "id": "1402",
+      "label": "اخلاق پزشکی ۱۴۰۲-۱۴۰۳",
+      "file": "data/questions-1402.json",
+      "total": 130,
+      "icon": "📖"
+    }
+  ]
+}
