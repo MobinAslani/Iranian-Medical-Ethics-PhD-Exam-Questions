@@ -33,6 +33,36 @@ const Renderer = {
         `;
     },
 
+    // ===== Navigator =====
+    navigator(questions, currentIndex, selectedAnswers, onNavigate) {
+        let html = `<div class="navigator-container">`;
+        html += `<div class="nav-label">📋 Question Navigator</div>`;
+        html += `<div class="nav-grid" role="navigation" aria-label="Question navigator">`;
+
+        for (let i = 0; i < questions.length; i++) {
+            const answer = selectedAnswers[i];
+            let status = 'unanswered';
+            if (answer !== null) {
+                status = answer === questions[i].correct ? 'correct' : 'incorrect';
+            }
+            const isCurrent = i === currentIndex;
+            let cls = 'nav-btn';
+            if (isCurrent) cls += ' current';
+            if (status === 'correct') cls += ' correct';
+            else if (status === 'incorrect') cls += ' incorrect';
+            else cls += ' unanswered';
+
+            html += `
+                <button class="${cls}" onclick="App.goToQuestion(${i})" aria-label="Go to question ${i+1}" ${isCurrent ? 'aria-current="step"' : ''}>
+                    ${i+1}
+                </button>
+            `;
+        }
+
+        html += '</div></div>';
+        return html;
+    },
+
     // ===== Quiz (New UI Design) =====
     quiz(state, questions, onSelect, onCheck, onNext, onPrev, onFinish, onNavigate) {
         const q = questions[state.currentQuestion];
@@ -69,8 +99,11 @@ const Renderer = {
                 else if (idx === answer && answer !== q.correct) statusIcon = '✕';
             }
 
+            // Allow deselect on click if not answered
+            const clickHandler = state.isAnswered ? '' : `onclick="App.toggleOption(${idx})"`;
+
             return `
-                <div class="${classes}" onclick="App.selectAnswer(${idx})" ${state.isAnswered ? 'style="pointer-events:none;"' : ''}>
+                <div class="${classes}" ${clickHandler} ${state.isAnswered ? 'style="pointer-events:none;"' : ''}>
                     <div class="radio">
                         <div class="dot"></div>
                     </div>
@@ -85,12 +118,16 @@ const Renderer = {
         if (state.isAnswered) {
             const isCorrect = state.isCorrect;
             const settings = Storage.getSettings();
+            const correctLetter = isPersian ? 
+                ['الف', 'ب', 'ج', 'د'][q.correct] : 
+                ['A', 'B', 'C', 'D'][q.correct];
+            
             feedbackHtml = `
                 <div class="feedback ${isCorrect ? 'correct' : 'incorrect'}">
                     <span class="icon">${isCorrect ? '✓' : '✕'}</span>
                     <div style="flex:1;">
                         <div style="font-weight:600;">${isCorrect ? 'Correct!' : 'Incorrect'}</div>
-                        ${!isCorrect ? `<div style="font-size:14px;color:var(--text-secondary);">Correct answer: Option ${q.correct + 1}</div>` : ''}
+                        ${!isCorrect ? `<div style="font-size:14px;color:var(--text-secondary);">Correct answer: ${correctLetter}</div>` : ''}
                         ${settings.showExplanations && q.explanation ? `
                             <div class="explanation">
                                 <strong>Explanation:</strong>
@@ -101,6 +138,9 @@ const Renderer = {
                 </div>
             `;
         }
+
+        // Navigator
+        const navigatorHtml = this.navigator(questions, state.currentQuestion, state.selectedAnswers, onNavigate);
 
         return `
             <div class="fade-in">
@@ -115,6 +155,9 @@ const Renderer = {
                 <div class="progress-bar-container">
                     <div class="fill" style="width:${progress}%;"></div>
                 </div>
+
+                <!-- Navigator (Bottom Box) -->
+                ${navigatorHtml}
 
                 <!-- Question Card -->
                 <div class="question-card">
