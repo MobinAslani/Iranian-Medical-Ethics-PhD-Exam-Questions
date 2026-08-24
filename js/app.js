@@ -169,6 +169,18 @@ const App = {
     },
 
     // ===== Quiz Actions =====
+    toggleOption(index) {
+        if (this.isAnswered) return;
+        // If the same option is clicked, deselect it
+        if (this.selectedAnswers[this.currentQuestion] === index) {
+            this.selectedAnswers[this.currentQuestion] = null;
+        } else {
+            this.selectedAnswers[this.currentQuestion] = index;
+        }
+        this.saveProgress();
+        this.render();
+    },
+
     selectAnswer(index) {
         if (this.isAnswered) return;
         this.selectedAnswers[this.currentQuestion] = index;
@@ -380,7 +392,7 @@ const App = {
             const idx = parseInt(key) - 1;
             const q = this.questions[this.currentQuestion];
             if (q && idx < q.options.length) {
-                this.selectAnswer(idx);
+                this.toggleOption(idx);
             }
         } else if (key === 'Enter') {
             if (!this.isAnswered && this.selectedAnswers[this.currentQuestion] !== null) {
