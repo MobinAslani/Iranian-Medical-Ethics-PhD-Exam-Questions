@@ -1,10 +1,5 @@
 In The Name of Allah
-# Iranian-Medical-Ethics-PhD-Exam-Questions
 
-
-Here's the final, polished README.md for your GitHub repository:
-
----
 
 # 🏥 Medical Ethics Quiz | آزمون اخلاق پزشکی
 
