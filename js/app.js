@@ -115,6 +115,7 @@ const App = {
     startQuiz(setId) {
         if (setId && setId !== this.selectedSetId) {
             this.loadSet(setId);
+            return;
         }
         this.selectedAnswers = new Array(this.questions.length).fill(null);
         this.currentQuestion = 0;
@@ -328,7 +329,8 @@ const App = {
                 currentQuestion: this.currentQuestion,
                 selectedAnswers: this.selectedAnswers,
                 isAnswered: this.isAnswered,
-                isCorrect: this.isCorrect
+                isCorrect: this.isCorrect,
+                startTime: this.startTime
             };
             this.el.innerHTML = Renderer.quiz(
                 state,
