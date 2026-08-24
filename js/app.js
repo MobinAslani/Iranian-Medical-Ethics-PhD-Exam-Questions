@@ -11,7 +11,7 @@ const App = {
     isCorrect: null,
     isFinished: false,
     startTime: Date.now(),
-    view: 'home', // 'home' | 'quiz' | 'results' | 'review'
+    view: 'home',
     reviewQuestion: null,
     settings: null,
 
@@ -36,7 +36,6 @@ const App = {
             if (!this.manifest.sets || this.manifest.sets.length === 0) {
                 throw new Error('No question sets found in manifest');
             }
-            // Load first set by default
             await this.loadSet(this.manifest.sets[0].id);
         } catch (err) {
             console.error('Error loading manifest:', err);
@@ -76,7 +75,6 @@ const App = {
         this.startTime = progress.startTime || Date.now();
         this.view = progress.view || 'home';
 
-        // Ensure selectedAnswers length matches questions
         if (this.selectedAnswers.length !== this.questions.length) {
             this.selectedAnswers = new Array(this.questions.length).fill(null);
         }
@@ -228,12 +226,10 @@ const App = {
         );
         document.body.appendChild(overlay);
 
-        // Bind toggle events
         overlay.querySelectorAll('.toggle-track').forEach(el => {
             el.addEventListener('click', () => {
                 const key = el.dataset.key;
                 this.toggleSetting(key);
-                // Update UI
                 const newEl = document.querySelector(`.toggle-track[data-key="${key}"]`);
                 if (newEl) {
                     if (this.settings[key]) {
@@ -245,12 +241,10 @@ const App = {
             });
         });
 
-        // Close on overlay click
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) this.closeSettings();
         });
 
-        // Close on Escape
         const handleEscape = (e) => {
             if (e.key === 'Escape') {
                 this.closeSettings();
@@ -268,7 +262,6 @@ const App = {
         this.settings[key] = !this.settings[key];
         Storage.setSettings(this.settings);
 
-        // If shuffling changed, reload questions
         if (key === 'shuffleQuestions' || key === 'shuffleChoices') {
             this.loadSet(this.selectedSetId);
         }
@@ -313,7 +306,6 @@ const App = {
         if (this.view === 'home') {
             if (!this.manifest) return;
             this.el.innerHTML = Renderer.home(this.manifest, (setId) => this.startQuiz(setId), () => this.openSettings());
-            // Bind set card clicks
             this.el.querySelectorAll('.set-card').forEach(card => {
                 card.addEventListener('click', () => {
                     const setId = card.dataset.setId;
@@ -411,13 +403,8 @@ const App = {
 };
 
 // ============================================================
-// Expose App to global scope
-// ============================================================
 window.App = App;
 
-// ============================================================
-// Start the application
-// ============================================================
 document.addEventListener('DOMContentLoaded', () => {
     App.init();
 });
