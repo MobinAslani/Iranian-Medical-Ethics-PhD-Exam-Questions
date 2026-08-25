@@ -289,6 +289,13 @@ const App = {
         }
     },
 
+    // ===== Direction (RTL/LTR) ===== [NEW]
+    setDirection(text) {
+        const isPersian = /[\u0600-\u06FF]/.test(text || '');
+        document.documentElement.setAttribute('dir', isPersian ? 'rtl' : 'ltr');
+        document.documentElement.setAttribute('lang', isPersian ? 'fa' : 'en');
+    },
+
     // ===== Results =====
     getResults() {
         const total = this.questions.length;
@@ -317,6 +324,7 @@ const App = {
 
         if (this.view === 'home') {
             if (!this.manifest) return;
+            this.setDirection(this.manifest.sets?.[0]?.label);   // [NEW]
             this.el.innerHTML = Renderer.home(this.manifest, (setId) => this.startQuiz(setId), () => this.openSettings());
             this.el.querySelectorAll('.set-card').forEach(card => {
                 card.addEventListener('click', () => {
@@ -329,6 +337,7 @@ const App = {
                 this.el.innerHTML = Renderer.error('No questions loaded.');
                 return;
             }
+            this.setDirection(this.questions[this.currentQuestion]?.question);   // [NEW]
             const state = {
                 currentQuestion: this.currentQuestion,
                 selectedAnswers: this.selectedAnswers,
@@ -347,6 +356,7 @@ const App = {
                 (idx) => this.goToQuestion(idx)
             );
         } else if (this.view === 'results') {
+            this.setDirection(this.questions[0]?.question);   // [NEW]
             const results = this.getResults();
             this.el.innerHTML = Renderer.results(
                 results,
@@ -363,6 +373,7 @@ const App = {
                 }
             );
         } else if (this.view === 'review') {
+            this.setDirection(this.questions[0]?.question);   // [NEW]
             this.el.innerHTML = Renderer.review(
                 this.questions,
                 this.selectedAnswers,
@@ -372,6 +383,7 @@ const App = {
         } else if (this.view === 'review_detail') {
             const idx = this.reviewQuestion;
             const q = this.questions[idx];
+            this.setDirection(q?.question);   // [NEW]
             const userAnswer = this.selectedAnswers[idx];
             this.el.innerHTML = Renderer.reviewDetail(
                 q,
