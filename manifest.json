@@ -6,6 +6,34 @@
       "file": "data/questions-1402.json",
       "total": 130,
       "icon": "📖"
+    },
+    {
+      "id": "pathology-series-4",
+      "label": "Pathology Series 4",
+      "file": "data/pathology-series-4.json",
+      "total": 0,
+      "icon": "🧬"
+    },
+    {
+      "id": "pathology-series-5",
+      "label": "Pathology Series 5",
+      "file": "data/pathology-series-5.json",
+      "total": 0,
+      "icon": "🧬"
+    },
+    {
+      "id": "pathology-series-6",
+      "label": "Pathology Series 6",
+      "file": "data/pathology-series-6.json",
+      "total": 0,
+      "icon": "🧬"
+    },
+    {
+      "id": "pathology-series-7",
+      "label": "Pathology Series 7",
+      "file": "data/pathology-series-7.json",
+      "total": 0,
+      "icon": "🧬"
     }
   ]
 }
