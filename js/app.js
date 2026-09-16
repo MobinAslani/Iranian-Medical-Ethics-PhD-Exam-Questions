@@ -1,83 +1,109 @@
-// ===== Main Application =====
-
 const App = {
-    // State
     manifest: null,
     questions: [],
     selectedSetId: null,
     currentQuestion: 0,
     selectedAnswers: [],
-    isAnswered: false,
-    isCorrect: null,
+    checkedAnswers: [],
     isFinished: false,
     startTime: Date.now(),
     view: 'home',
     reviewQuestion: null,
     settings: null,
-
-    // DOM
+    timerId: null,
+    navigatorOpen: false,
     el: document.getElementById('app'),
 
-    // ===== Init =====
     async init() {
         this.settings = Storage.getSettings();
         this.applyTheme();
         await this.loadManifest();
-        this.render();
         this.bindEvents();
+        this.render();
     },
 
-    // ===== Load Data =====
     async loadManifest() {
         try {
-            const res = await fetch('manifest.json');
-            if (!res.ok) throw new Error('manifest.json not found');
-            this.manifest = await res.json();
-            if (!this.manifest.sets || this.manifest.sets.length === 0) {
+            const response = await fetch('manifest.json');
+            if (!response.ok) throw new Error('manifest.json not found');
+            this.manifest = await response.json();
+            if (!Array.isArray(this.manifest.sets) || !this.manifest.sets.length) {
                 throw new Error('No question sets found in manifest');
             }
-            await this.loadSet(this.manifest.sets[0].id);
-        } catch (err) {
-            console.error('Error loading manifest:', err);
-            this.el.innerHTML = Renderer.error('Failed to load manifest.json. Please check the file exists.');
+            await this.loadSet(this.manifest.sets[0].id, false);
+        } catch (error) {
+            console.error('Error loading manifest:', error);
+            this.el.innerHTML = Renderer.error('Unable to load the question library.');
         }
     },
 
-    async loadSet(setId) {
-        const set = this.manifest.sets.find(s => s.id === setId);
-        if (!set) {
-            console.error('Set not found:', setId);
-            return;
+    shuffle(items, seed) {
+        const result = [...items];
+        for (let i = result.length - 1; i > 0; i--) {
+            seed = (seed * 1664525 + 1013904223) >>> 0;
+            const j = seed % (i + 1);
+            [result[i], result[j]] = [result[j], result[i]];
         }
+        return result;
+    },
 
+    prepareQuestions(rawQuestions, setId) {
+        let questions = rawQuestions.map(question => ({
+            ...question,
+            options: [...question.options]
+        }));
+        let seed = Array.from(setId).reduce((total, char) => total + char.charCodeAt(0), 17);
+        if (this.settings.shuffleQuestions) questions = this.shuffle(questions, seed);
+        if (this.settings.shuffleChoices) {
+            questions = questions.map(question => {
+                const correctText = question.options[question.correct];
+                const options = this.shuffle(question.options, seed += 31);
+                return { ...question, options, correct: options.indexOf(correctText) };
+            });
+        }
+        return questions;
+    },
+
+    async loadSet(setId, openQuiz = true) {
+        const set = this.manifest?.sets.find(item => item.id === setId);
+        if (!set) return;
         try {
-            const res = await fetch(set.file);
-            if (!res.ok) throw new Error(`Failed to load ${set.file}`);
-            this.questions = await res.json();
+            const response = await fetch(set.file);
+            if (!response.ok) throw new Error(`Failed to load ${set.file}`);
+            const rawQuestions = await response.json();
+            if (!Array.isArray(rawQuestions) || rawQuestions.length === 0) {
+                this.el.innerHTML = Renderer.error('This question set is empty and cannot be started.');
+                return;
+            }
+            this.questions = this.prepareQuestions(rawQuestions, setId);
             this.selectedSetId = setId;
             this.loadProgress();
+            if (openQuiz) {
+                this.view = 'quiz';
+                this.saveProgress();
+            }
             this.render();
-        } catch (err) {
-            console.error('Error loading questions:', err);
-            this.el.innerHTML = Renderer.error(`Failed to load ${set.file}. Please check the file exists.`);
+        } catch (error) {
+            console.error('Error loading questions:', error);
+            this.el.innerHTML = Renderer.error('Unable to load this question set.');
         }
     },
 
-    // ===== Progress =====
     loadProgress() {
-        if (!this.selectedSetId) return;
-        const progress = Storage.getProgress(this.selectedSetId);
-        this.currentQuestion = progress.currentQuestion || 0;
-        this.selectedAnswers = progress.selectedAnswers || new Array(this.questions.length).fill(null);
-        this.isAnswered = progress.isAnswered || false;
-        this.isCorrect = progress.isCorrect || null;
-        this.isFinished = progress.isFinished || false;
+        const progress = Storage.getProgress(this.selectedSetId, this.questions.length);
+        this.currentQuestion = Math.min(progress.currentQuestion || 0, this.questions.length - 1);
+        this.selectedAnswers = Array.isArray(progress.selectedAnswers) &&
+            progress.selectedAnswers.length === this.questions.length
+            ? progress.selectedAnswers : new Array(this.questions.length).fill(null);
+        this.checkedAnswers = Array.isArray(progress.checkedAnswers) &&
+            progress.checkedAnswers.length === this.questions.length
+            ? progress.checkedAnswers : new Array(this.questions.length).fill(false);
+        if (progress.checkedAnswers === undefined && progress.isAnswered) {
+            this.checkedAnswers[this.currentQuestion] = true;
+        }
+        this.isFinished = Boolean(progress.isFinished);
         this.startTime = progress.startTime || Date.now();
         this.view = progress.view || 'home';
-
-        if (this.selectedAnswers.length !== this.questions.length) {
-            this.selectedAnswers = new Array(this.questions.length).fill(null);
-        }
     },
 
     saveProgress() {
@@ -85,15 +111,13 @@ const App = {
         Storage.setProgress(this.selectedSetId, {
             currentQuestion: this.currentQuestion,
             selectedAnswers: this.selectedAnswers,
-            isAnswered: this.isAnswered,
-            isCorrect: this.isCorrect,
+            checkedAnswers: this.checkedAnswers,
             isFinished: this.isFinished,
             startTime: this.startTime,
             view: this.view
         });
     },
 
-    // ===== Navigation =====
     goToView(view) {
         this.view = view;
         this.reviewQuestion = null;
@@ -101,24 +125,32 @@ const App = {
         this.render();
     },
 
+    goHome() {
+        if (this.view === 'quiz' && !this.isFinished &&
+            this.selectedAnswers.some(answer => answer !== null) &&
+            !confirm('Leave this quiz? Your progress will be saved.')) return;
+        this.goToView('home');
+    },
+
+    toggleNavigator() {
+        this.navigatorOpen = !this.navigatorOpen;
+        document.querySelector('.quiz-layout')?.classList.toggle('navigator-visible', this.navigatorOpen);
+    },
+
     goToQuestion(index) {
         if (index < 0 || index >= this.questions.length) return;
         this.currentQuestion = index;
-        this.isAnswered = false;
-        this.isCorrect = null;
         this.saveProgress();
         this.render();
     },
 
-    startQuiz(setId) {
-        if (setId && setId !== this.selectedSetId) {
-            this.loadSet(setId);
-            return;
+    async startQuiz(setId) {
+        if (setId !== this.selectedSetId) {
+            await this.loadSet(setId, false);
         }
         this.selectedAnswers = new Array(this.questions.length).fill(null);
+        this.checkedAnswers = new Array(this.questions.length).fill(false);
         this.currentQuestion = 0;
-        this.isAnswered = false;
-        this.isCorrect = null;
         this.isFinished = false;
         this.startTime = Date.now();
         this.view = 'quiz';
@@ -127,12 +159,8 @@ const App = {
     },
 
     finishQuiz() {
-        const unanswered = this.selectedAnswers.filter(a => a === null).length;
-        if (unanswered > 0) {
-            if (!confirm(`You have ${unanswered} unanswered questions. Are you sure you want to finish?`)) {
-                return;
-            }
-        }
+        const unanswered = this.selectedAnswers.filter(answer => answer === null).length;
+        if (unanswered && !confirm(`You have ${unanswered} unanswered questions. Finish anyway?`)) return;
         this.isFinished = true;
         this.view = 'results';
         this.saveProgress();
@@ -141,59 +169,34 @@ const App = {
 
     restartQuiz() {
         if (!confirm('Restart quiz? Your current progress will be lost.')) return;
-        this.selectedAnswers = new Array(this.questions.length).fill(null);
-        this.currentQuestion = 0;
-        this.isAnswered = false;
-        this.isCorrect = null;
-        this.isFinished = false;
-        this.startTime = Date.now();
-        this.view = 'quiz';
-        this.saveProgress();
-        this.render();
+        this.startQuiz(this.selectedSetId);
     },
 
     resetAllProgress() {
-        if (this.selectedSetId) {
-            Storage.removeProgress(this.selectedSetId);
-        }
+        if (this.selectedSetId) Storage.removeProgress(this.selectedSetId);
         this.selectedAnswers = new Array(this.questions.length).fill(null);
+        this.checkedAnswers = new Array(this.questions.length).fill(false);
         this.currentQuestion = 0;
-        this.isAnswered = false;
-        this.isCorrect = null;
         this.isFinished = false;
-        this.startTime = Date.now();
         this.view = 'home';
         this.saveProgress();
-        this.render();
         this.closeSettings();
-    },
-
-    // ===== Quiz Actions =====
-    toggleOption(index) {
-        if (this.isAnswered) return;
-        // If the same option is clicked, deselect it
-        if (this.selectedAnswers[this.currentQuestion] === index) {
-            this.selectedAnswers[this.currentQuestion] = null;
-        } else {
-            this.selectedAnswers[this.currentQuestion] = index;
-        }
-        this.saveProgress();
         this.render();
     },
 
-    selectAnswer(index) {
-        if (this.isAnswered) return;
-        this.selectedAnswers[this.currentQuestion] = index;
+    toggleOption(index) {
+        if (this.checkedAnswers[this.currentQuestion]) return;
+        this.selectedAnswers[this.currentQuestion] =
+            this.selectedAnswers[this.currentQuestion] === index ? null : index;
         this.saveProgress();
         this.render();
     },
 
     checkAnswer() {
-        const q = this.questions[this.currentQuestion];
-        if (!q || this.selectedAnswers[this.currentQuestion] === null) return;
+        const question = this.questions[this.currentQuestion];
         const answer = this.selectedAnswers[this.currentQuestion];
-        this.isAnswered = true;
-        this.isCorrect = answer === q.correct;
+        if (!question || answer === null) return;
+        this.checkedAnswers[this.currentQuestion] = true;
         this.saveProgress();
         this.render();
     },
@@ -201,8 +204,6 @@ const App = {
     nextQuestion() {
         if (this.currentQuestion < this.questions.length - 1) {
             this.currentQuestion++;
-            this.isAnswered = false;
-            this.isCorrect = null;
             this.saveProgress();
             this.render();
         } else {
@@ -213,8 +214,6 @@ const App = {
     previousQuestion() {
         if (this.currentQuestion > 0) {
             this.currentQuestion--;
-            this.isAnswered = false;
-            this.isCorrect = null;
             this.saveProgress();
             this.render();
         }
@@ -226,209 +225,131 @@ const App = {
         this.render();
     },
 
-    // ===== Settings =====
     openSettings() {
+        this.closeSettings();
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
         overlay.id = 'settings-modal';
-        overlay.innerHTML = Renderer.settingsModal(
-            this.settings,
-            null,
-            () => this.resetAllProgress()
-        );
+        overlay.innerHTML = Renderer.settingsModal(this.settings);
         document.body.appendChild(overlay);
-
-        overlay.querySelectorAll('.toggle-track').forEach(el => {
-            el.addEventListener('click', () => {
-                const key = el.dataset.key;
-                this.toggleSetting(key);
-                const newEl = document.querySelector(`.toggle-track[data-key="${key}"]`);
-                if (newEl) {
-                    if (this.settings[key]) {
-                        newEl.classList.add('active');
-                    } else {
-                        newEl.classList.remove('active');
-                    }
+        overlay.querySelectorAll('.toggle-track').forEach(toggle => {
+            const handler = () => this.toggleSetting(toggle.dataset.key);
+            toggle.addEventListener('click', handler);
+            toggle.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    handler();
                 }
             });
         });
-
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) this.closeSettings();
+        overlay.addEventListener('click', event => {
+            if (event.target === overlay) this.closeSettings();
         });
-
-        const handleEscape = (e) => {
-            if (e.key === 'Escape') {
-                this.closeSettings();
-                document.removeEventListener('keydown', handleEscape);
-            }
-        };
-        document.addEventListener('keydown', handleEscape);
     },
 
     closeSettings() {
         document.getElementById('settings-modal')?.remove();
     },
 
-    toggleSetting(key) {
+    async toggleSetting(key) {
         this.settings[key] = !this.settings[key];
         Storage.setSettings(this.settings);
-
-        if (key === 'shuffleQuestions' || key === 'shuffleChoices') {
-            this.loadSet(this.selectedSetId);
-        }
-
         this.applyTheme();
+        if (key === 'shuffleQuestions' || key === 'shuffleChoices') {
+            if (this.selectedSetId) Storage.removeProgress(this.selectedSetId);
+            await this.loadSet(this.selectedSetId, false);
+            this.view = 'home';
+            this.render();
+        } else {
+            this.openSettings();
+        }
     },
 
     applyTheme() {
-        if (this.settings.darkMode) {
-            document.documentElement.setAttribute('data-theme', 'dark');
-        } else {
-            document.documentElement.removeAttribute('data-theme');
-        }
+        document.documentElement.removeAttribute('data-theme');
+        if (this.settings.darkMode) document.documentElement.setAttribute('data-theme', 'dark');
     },
 
-    // ===== Direction (RTL/LTR) ===== [NEW]
     setDirection(text) {
         const isPersian = /[\u0600-\u06FF]/.test(text || '');
-        document.documentElement.setAttribute('dir', isPersian ? 'rtl' : 'ltr');
-        document.documentElement.setAttribute('lang', isPersian ? 'fa' : 'en');
+        document.documentElement.dir = isPersian ? 'rtl' : 'ltr';
+        document.documentElement.lang = isPersian ? 'fa' : 'en';
     },
 
-    // ===== Results =====
     getResults() {
-        const total = this.questions.length;
-        let correct = 0,
-            incorrect = 0,
-            unanswered = 0;
-        this.selectedAnswers.forEach((answer, idx) => {
+        let correct = 0, incorrect = 0, unanswered = 0;
+        this.selectedAnswers.forEach((answer, index) => {
             if (answer === null) unanswered++;
-            else if (answer === this.questions[idx].correct) correct++;
+            else if (answer === this.questions[index].correct) correct++;
             else incorrect++;
         });
-        const answered = total - unanswered;
         return {
-            total,
+            total: this.questions.length,
             correct,
             incorrect,
             unanswered,
-            percentage: answered > 0 ? Math.round((correct / answered) * 100) : 0,
+            percentage: this.questions.length ? Math.round(correct / this.questions.length * 100) : 0,
             timeTaken: Math.floor((Date.now() - this.startTime) / 1000)
         };
     },
 
-    // ===== Rendering =====
     render() {
         if (!this.el) return;
-
         if (this.view === 'home') {
-            if (!this.manifest) return;
-            this.setDirection(this.manifest.sets?.[0]?.label);   // [NEW]
-            this.el.innerHTML = Renderer.home(this.manifest, (setId) => this.startQuiz(setId), () => this.openSettings());
-            this.el.querySelectorAll('.set-card').forEach(card => {
-                card.addEventListener('click', () => {
-                    const setId = card.dataset.setId;
-                    this.startQuiz(setId);
-                });
-            });
+            this.setDirection(this.manifest?.sets?.[0]?.label);
+            this.el.innerHTML = Renderer.home(this.manifest);
+            this.el.querySelectorAll('.set-card').forEach(card =>
+                card.addEventListener('click', () => this.startQuiz(card.dataset.setId)));
         } else if (this.view === 'quiz') {
-            if (!this.questions || this.questions.length === 0) {
-                this.el.innerHTML = Renderer.error('No questions loaded.');
-                return;
-            }
-            this.setDirection(this.questions[this.currentQuestion]?.question);   // [NEW]
-            const state = {
-                currentQuestion: this.currentQuestion,
-                selectedAnswers: this.selectedAnswers,
-                isAnswered: this.isAnswered,
-                isCorrect: this.isCorrect,
-                startTime: this.startTime
-            };
-            this.el.innerHTML = Renderer.quiz(
-                state,
-                this.questions,
-                (idx) => this.selectAnswer(idx),
-                () => this.checkAnswer(),
-                () => this.nextQuestion(),
-                () => this.previousQuestion(),
-                () => this.finishQuiz(),
-                (idx) => this.goToQuestion(idx)
-            );
+            this.setDirection(this.questions[this.currentQuestion]?.question);
+            this.el.innerHTML = Renderer.quiz(this, this.questions);
+            this.startTimer();
         } else if (this.view === 'results') {
-            this.setDirection(this.questions[0]?.question);   // [NEW]
-            const results = this.getResults();
-            this.el.innerHTML = Renderer.results(
-                results,
-                () => this.goToView('review'),
-                () => this.restartQuiz(),
-                () => {
-                    this.goToView('home');
-                    this.selectedAnswers = new Array(this.questions.length).fill(null);
-                    this.currentQuestion = 0;
-                    this.isAnswered = false;
-                    this.isCorrect = null;
-                    this.isFinished = false;
-                    this.saveProgress();
-                }
-            );
+            this.setDirection(this.questions[0]?.question);
+            this.stopTimer();
+            this.el.innerHTML = Renderer.results(this.getResults());
         } else if (this.view === 'review') {
-            this.setDirection(this.questions[0]?.question);   // [NEW]
-            this.el.innerHTML = Renderer.review(
-                this.questions,
-                this.selectedAnswers,
-                () => this.goToView('home'),
-                (idx) => this.showReviewDetail(idx)
-            );
+            this.setDirection(this.questions[0]?.question);
+            this.el.innerHTML = Renderer.review(this.questions, this.selectedAnswers);
         } else if (this.view === 'review_detail') {
-            const idx = this.reviewQuestion;
-            const q = this.questions[idx];
-            this.setDirection(q?.question);   // [NEW]
-            const userAnswer = this.selectedAnswers[idx];
+            const question = this.questions[this.reviewQuestion];
+            this.setDirection(question?.question);
             this.el.innerHTML = Renderer.reviewDetail(
-                q,
-                idx,
-                userAnswer,
-                () => this.goToView('review')
-            );
+                question, this.reviewQuestion, this.selectedAnswers[this.reviewQuestion]);
         }
     },
 
-    // ===== Keyboard =====
-    handleKeydown(e) {
-        if (this.view !== 'quiz') return;
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    startTimer() {
+        this.stopTimer();
+        this.timerId = setInterval(() => {
+            const timer = document.querySelector('[data-timer]');
+            if (timer) timer.textContent = Renderer.formatTime((Date.now() - this.startTime) / 1000);
+        }, 1000);
+    },
 
-        const key = e.key;
-        if (['1', '2', '3', '4'].includes(key)) {
-            const idx = parseInt(key) - 1;
-            const q = this.questions[this.currentQuestion];
-            if (q && idx < q.options.length) {
-                this.toggleOption(idx);
-            }
-        } else if (key === 'Enter') {
-            if (!this.isAnswered && this.selectedAnswers[this.currentQuestion] !== null) {
-                this.checkAnswer();
-            } else if (this.isAnswered) {
-                this.nextQuestion();
-            }
-        } else if (key === 'ArrowLeft') {
+    stopTimer() {
+        if (this.timerId) clearInterval(this.timerId);
+        this.timerId = null;
+    },
+
+    handleKeydown(event) {
+        if (this.view !== 'quiz' || ['INPUT', 'TEXTAREA', 'BUTTON'].includes(event.target.tagName)) return;
+        if (/^[1-9]$/.test(event.key) && Number(event.key) <= this.questions[this.currentQuestion].options.length) {
+            this.toggleOption(Number(event.key) - 1);
+        } else if (event.key === 'Enter') {
+            if (this.checkedAnswers[this.currentQuestion]) this.nextQuestion();
+            else this.checkAnswer();
+        } else if (event.key === 'ArrowLeft') {
             this.previousQuestion();
-        } else if (key === 'ArrowRight') {
-            if (this.isAnswered) {
-                this.nextQuestion();
-            }
+        } else if (event.key === 'ArrowRight' && this.checkedAnswers[this.currentQuestion]) {
+            this.nextQuestion();
         }
     },
 
     bindEvents() {
-        document.addEventListener('keydown', (e) => this.handleKeydown(e));
+        document.addEventListener('keydown', event => this.handleKeydown(event));
     }
 };
 
-// ============================================================
 window.App = App;
-
-document.addEventListener('DOMContentLoaded', () => {
-    App.init();
-});
+document.addEventListener('DOMContentLoaded', () => App.init());
