@@ -1,57 +1,57 @@
-// ===== LocalStorage Helpers =====
-
 const Storage = {
     get(key, fallback) {
         try {
-            const data = localStorage.getItem(key);
-            return data ? JSON.parse(data) : fallback;
-        } catch { return fallback; }
+            const raw = localStorage.getItem(key);
+            return raw === null ? fallback : JSON.parse(raw);
+        } catch (error) {
+            console.warn(`Unable to read saved quiz data for "${key}".`, error);
+            return fallback;
+        }
     },
 
     set(key, value) {
         try {
             localStorage.setItem(key, JSON.stringify(value));
-        } catch { /* ignore */ }
+            return true;
+        } catch (error) {
+            console.warn(`Unable to save quiz data for "${key}".`, error);
+            return false;
+        }
     },
 
     remove(key) {
         try {
             localStorage.removeItem(key);
-        } catch { /* ignore */ }
+        } catch (error) {
+            console.warn(`Unable to remove saved quiz data for "${key}".`, error);
+        }
     },
 
     getSettings() {
-        return this.get('quizSettings', {
+        return {
             darkMode: false,
             showExplanations: true,
             shuffleQuestions: false,
-            shuffleChoices: false
-        });
+            shuffleChoices: false,
+            ...this.get('quizSettings', {})
+        };
     },
 
-    setSettings(settings) {
-        this.set('quizSettings', settings);
-    },
+    setSettings(settings) { return this.set('quizSettings', settings); },
 
     getProgress(setId) {
         return this.get(`quizProgress_${setId}`, {
             currentQuestion: 0,
             selectedAnswers: [],
-            isAnswered: false,
-            isCorrect: null,
+            checkedAnswers: [],
             isFinished: false,
             startTime: Date.now(),
             view: 'home'
         });
     },
 
-    setProgress(setId, progress) {
-        this.set(`quizProgress_${setId}`, progress);
-    },
-
-    removeProgress(setId) {
-        this.remove(`quizProgress_${setId}`);
-    }
+    setProgress(setId, progress) { return this.set(`quizProgress_${setId}`, progress); },
+    removeProgress(setId) { this.remove(`quizProgress_${setId}`); }
 };
 
 window.Storage = Storage;

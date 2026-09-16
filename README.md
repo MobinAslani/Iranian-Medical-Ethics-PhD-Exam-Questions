@@ -9,7 +9,7 @@ Interactive exam platform with 130+ questions, RTL support, dark mode, and manif
 
 ## ✨ Features
 
-- 📚 **130+ questions** from medical ethics board exams
+- 📚 **291 questions** across medical ethics and pathology sets
 - 🔄 **Manifest-based content** — add new question sets by uploading JSON files
 - 🌙 **Dark/Light mode** with persistent settings
 - 📱 **Fully responsive** — works on desktop, tablet, and mobile
@@ -106,6 +106,9 @@ python -m http.server 8000
 # or
 npx serve
 # or open index.html directly (CORS might block JSON loading)
+
+# Validate all manifest totals and question records
+node scripts/validate-data.js
 ```
 
 ---
@@ -141,8 +144,8 @@ npx serve
 
 ## 🔧 Settings
 
-- **Shuffle questions** — randomize question order
-- **Shuffle choices** — randomize answer order
+- **Shuffle questions** — randomize question order for a new attempt
+- **Shuffle choices** — randomize answer order for a new attempt
 - **Dark mode** — toggle light/dark theme
 - **Show explanations** — show/hide answer explanations
 
@@ -173,7 +176,7 @@ Built with ❤️ for medical ethics students. Based on official exam materials.
 
 ## 📧 Contact
 
-Questions or feedback? Open an issue or reach out.
+Questions or feedback? Open an issue or reach out. Run the repository's data validation checks before adding a new set, and keep each manifest `total` equal to the JSON file length.
 
 ---
 

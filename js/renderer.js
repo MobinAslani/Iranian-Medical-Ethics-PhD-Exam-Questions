@@ -1,410 +1,163 @@
-// ===== UI Rendering Functions =====
-
 const Renderer = {
-    // ===== Home =====
-    home(manifest, onSelectSet, onSettings) {
-        const setsHtml = manifest.sets.map(set => `
-            <button class="set-card" data-set-id="${set.id}">
-                <span class="icon">${set.icon || '📖'}</span>
+    escape(value) {
+        return String(value ?? '').replace(/[&<>"']/g, char => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[char]));
+    },
+
+    formatTime(seconds) {
+        const total = Math.max(0, Math.floor(seconds));
+        return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+    },
+
+    home(manifest) {
+        const sets = manifest.sets.map(set => `
+            <button class="set-card" data-set-id="${this.escape(set.id)}">
+                <span class="icon">${this.escape(set.icon || '📖')}</span>
                 <span class="info">
-                    <div style="font-weight:600;">${set.label}</div>
-                    <div class="count">${set.total || '?'} questions</div>
+                    <strong>${this.escape(set.label)}</strong>
+                    <span class="count">${set.total || '?'} questions</span>
                 </span>
-                <span class="arrow">→</span>
-            </button>
-        `).join('');
-
-        return `
-            <div class="card card-lg text-center fade-in" style="max-width:600px;margin:0 auto;">
-                <div style="font-size:3rem;margin-bottom:8px;">📚</div>
-                <h1 class="home-title">Medical Ethics Quiz</h1>
-                <p style="color:var(--text-secondary);margin:8px 0 24px;font-size:15px;">
-                    Select a question set to begin
-                </p>
-
-                <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px;">
-                    ${setsHtml}
-                </div>
-
-                <button class="btn btn-secondary btn-block" onclick="App.openSettings()">
-                    ⚙️ Settings
-                </button>
-            </div>
-        `;
+                <span class="arrow" aria-hidden="true">→</span>
+            </button>`).join('');
+        return `<div class="card card-lg text-center fade-in home-card">
+            <div class="home-icon" aria-hidden="true">📚</div>
+            <h1 class="home-title">Medical Ethics Quiz</h1>
+            <p class="home-subtitle">Select a question set to begin</p>
+            <div class="set-list">${sets}</div>
+            <button class="btn btn-secondary btn-block" onclick="App.openSettings()">⚙️ Settings</button>
+        </div>`;
     },
 
-    // ===== Navigator =====
-    navigator(questions, currentIndex, selectedAnswers, onNavigate) {
-        let html = `<div class="navigator-container">`;
-        html += `<div class="nav-label">📋 Question Navigator</div>`;
-        html += `<div class="nav-grid" role="navigation" aria-label="Question navigator">`;
-
-        for (let i = 0; i < questions.length; i++) {
-            const answer = selectedAnswers[i];
-            let status = 'unanswered';
-            if (answer !== null) {
-                status = answer === questions[i].correct ? 'correct' : 'incorrect';
-            }
-            const isCurrent = i === currentIndex;
-            let cls = 'nav-btn';
-            if (isCurrent) cls += ' current';
-            if (status === 'correct') cls += ' correct';
-            else if (status === 'incorrect') cls += ' incorrect';
-            else cls += ' unanswered';
-
-            html += `
-                <button class="${cls}" onclick="App.goToQuestion(${i})" aria-label="Go to question ${i+1}" ${isCurrent ? 'aria-current="step"' : ''}>
-                    ${i+1}
-                </button>
-            `;
-        }
-
-        html += '</div></div>';
-        return html;
-    },
-
-    // ===== Quiz (New UI Design) =====
-    quiz(state, questions, onSelect, onCheck, onNext, onPrev, onFinish, onNavigate) {
-        const q = questions[state.currentQuestion];
-        if (!q) return '<p>No question found.</p>';
-
-        const total = questions.length;
-        const current = state.currentQuestion + 1;
-        const answer = state.selectedAnswers[state.currentQuestion];
-        const isPersian = /[\u0600-\u06FF]/.test(q.question);
-
-        const answeredCount = state.selectedAnswers.filter(a => a !== null).length;
-        const progress = (answeredCount / total) * 100;
-
-        // Timer
-        const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
-        const mins = Math.floor(elapsed / 60);
-        const secs = elapsed % 60;
-        const timerStr = `${mins}:${secs.toString().padStart(2, '0')}`;
-
-        // Options
-        let optionsHtml = q.options.map((opt, idx) => {
-            let classes = 'option-card';
-            if (state.isAnswered) {
-                classes += ' disabled';
-                if (idx === q.correct) classes += ' correct';
-                if (idx === answer && answer !== q.correct) classes += ' wrong';
-            } else {
-                if (answer === idx) classes += ' selected';
-            }
-
-            let statusIcon = '';
-            if (state.isAnswered) {
-                if (idx === q.correct) statusIcon = '✓';
-                else if (idx === answer && answer !== q.correct) statusIcon = '✕';
-            }
-
-            // Allow deselect on click if not answered
-            const clickHandler = state.isAnswered ? '' : `onclick="App.toggleOption(${idx})"`;
-
-            return `
-                <div class="${classes}" ${clickHandler} ${state.isAnswered ? 'style="pointer-events:none;"' : ''}>
-                    <div class="radio">
-                        <div class="dot"></div>
-                    </div>
-                    <span>${opt}</span>
-                    ${statusIcon ? `<span class="status-icon">${statusIcon}</span>` : ''}
-                </div>
-            `;
+    navigator(app, questions) {
+        const buttons = questions.map((question, index) => {
+            const answer = app.selectedAnswers[index];
+            const checked = app.checkedAnswers[index];
+            const status = !checked ? 'unanswered' :
+                answer === question.correct ? 'correct' : 'incorrect';
+            const current = index === app.currentQuestion ? ' current' : '';
+            return `<button class="nav-btn ${status}${current}" onclick="App.goToQuestion(${index})"
+                aria-label="Go to question ${index + 1}" ${current ? 'aria-current="step"' : ''}>${index + 1}</button>`;
         }).join('');
-
-        // Feedback
-        let feedbackHtml = '';
-        if (state.isAnswered) {
-            const isCorrect = state.isCorrect;
-            const settings = Storage.getSettings();
-            const correctLetter = isPersian ? 
-                ['الف', 'ب', 'ج', 'د'][q.correct] : 
-                ['A', 'B', 'C', 'D'][q.correct];
-            
-            feedbackHtml = `
-                <div class="feedback ${isCorrect ? 'correct' : 'incorrect'}">
-                    <span class="icon">${isCorrect ? '✓' : '✕'}</span>
-                    <div style="flex:1;">
-                        <div style="font-weight:600;">${isCorrect ? 'Correct!' : 'Incorrect'}</div>
-                        ${!isCorrect ? `<div style="font-size:14px;color:var(--text-secondary);">Correct answer: ${correctLetter}</div>` : ''}
-                        ${settings.showExplanations && q.explanation ? `
-                            <div class="explanation">
-                                <strong>Explanation:</strong>
-                                <p style="margin-top:4px;">${q.explanation}</p>
-                            </div>
-                        ` : ''}
-                    </div>
-                </div>
-            `;
-        }
-
-        // Navigator
-        const navigatorHtml = this.navigator(questions, state.currentQuestion, state.selectedAnswers, onNavigate);
-
-        return `
-            <div class="fade-in">
-                <!-- Top Bar -->
-                <div class="quiz-header">
-                    <span class="title">${q.category || 'Quiz'}</span>
-                    <span class="progress-text">Questions ${current} of ${total}</span>
-                    <span class="timer">⏱ ${timerStr}</span>
-                </div>
-
-                <!-- Progress Bar -->
-                <div class="progress-bar-container">
-                    <div class="fill" style="width:${progress}%;"></div>
-                </div>
-
-                <!-- Navigator (Bottom Box) -->
-                ${navigatorHtml}
-
-                <!-- Question Card -->
-                <div class="question-card">
-                    <div class="question-number">Question ${current} of ${total}</div>
-                    ${q.category ? `<div class="category-tag">${q.category}</div>` : ''}
-                    <div class="question-text">${q.question}</div>
-
-                    <!-- Options -->
-                    <div class="options-grid">
-                        ${optionsHtml}
-                    </div>
-
-                    ${feedbackHtml}
-                </div>
-
-                <!-- Check Answer Button -->
-                ${!state.isAnswered ? `
-                    <div class="check-answer-container">
-                        <button class="btn btn-primary" onclick="App.checkAnswer()" ${answer === null ? 'disabled' : ''}>
-                            Check Answer
-                        </button>
-                    </div>
-                ` : ''}
-
-                <!-- Navigation -->
-                <div class="nav-buttons">
-                    <div class="left">
-                        <button class="btn btn-outline" onclick="App.previousQuestion()" ${state.currentQuestion === 0 ? 'disabled' : ''}>
-                            ← Previous
-                        </button>
-                    </div>
-                    <div class="right">
-                        ${state.isAnswered ? `
-                            <button class="btn btn-primary" onclick="App.nextQuestion()">
-                                ${state.currentQuestion === total - 1 ? 'Finish →' : 'Next →'}
-                            </button>
-                        ` : ''}
-                        ${state.isAnswered && state.currentQuestion < total - 1 ? `
-                            <button class="btn btn-outline btn-sm" onclick="App.finishQuiz()">
-                                Finish
-                            </button>
-                        ` : ''}
-                    </div>
-                </div>
+        return `<aside class="navigator-container" aria-label="Question navigator">
+            <div class="navigator-heading">
+                <span>📋 Question Navigator</span>
+                <button class="navigator-close btn btn-sm btn-outline" onclick="App.toggleNavigator()" aria-label="Close navigator">×</button>
             </div>
-        `;
+            <div class="nav-grid">${buttons}</div>
+        </aside>`;
     },
 
-    // ===== Results =====
-    results(results, onReview, onRestart, onHome) {
-        const formatTime = (s) => {
-            const m = Math.floor(s / 60);
-            const sec = s % 60;
-            return `${m}:${sec.toString().padStart(2, '0')}`;
-        };
-
-        return `
-            <div class="card card-lg text-center fade-in" style="max-width:600px;margin:0 auto;">
-                <div style="font-size:3rem;margin-bottom:8px;">🎉</div>
-                <h2 style="font-size:1.8rem;font-weight:700;margin-bottom:12px;">Quiz Complete</h2>
-
-                <div style="margin:24px 0;">
-                    <div class="result-number">${results.correct} / ${results.total}</div>
-                    <div style="font-size:1.3rem;color:var(--text-secondary);">${results.percentage}%</div>
-                </div>
-
-                <div class="stat-grid" style="margin-bottom:24px;">
-                    <div class="stat-item">
-                        <div class="number" style="color:var(--success);">${results.correct}</div>
-                        <div class="label">Correct</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="number" style="color:var(--danger);">${results.incorrect}</div>
-                        <div class="label">Incorrect</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="number" style="color:var(--text-muted);">${results.unanswered}</div>
-                        <div class="label">Unanswered</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="number" style="color:var(--accent);">${formatTime(results.timeTaken)}</div>
-                        <div class="label">Time</div>
-                    </div>
-                </div>
-
-                <div style="display:flex;flex-direction:column;gap:10px;">
-                    <button class="btn btn-primary btn-block" onclick="App.goToView('review')">
-                        Review Answers
-                    </button>
-                    <button class="btn btn-secondary btn-block" onclick="App.restartQuiz()">
-                        Restart Quiz
-                    </button>
-                    <button class="btn btn-outline btn-block" onclick="App.goToView('home')">
-                        Back to Home
-                    </button>
-                </div>
-            </div>
-        `;
-    },
-
-    // ===== Review =====
-    review(questions, selectedAnswers, onBack, onQuestionClick) {
-        let itemsHtml = questions.map((q, idx) => {
-            const answer = selectedAnswers[idx];
-            let status = 'unanswered';
-            let statusText = '•';
-            let statusClass = 'unanswered';
-            if (answer !== null) {
-                if (answer === q.correct) {
-                    status = 'correct';
-                    statusText = '✓';
-                    statusClass = 'correct';
-                } else {
-                    status = 'incorrect';
-                    statusText = '✕';
-                    statusClass = 'incorrect';
-                }
-            }
-
-            return `
-                <div class="review-item" onclick="App.showReviewDetail(${idx})">
-                    <span class="status ${statusClass}">${statusText}</span>
-                    <span class="q-text">${q.question}</span>
-                    <span style="font-size:12px;color:var(--text-muted);">→</span>
-                </div>
-            `;
-        }).join('');
-
-        return `
-            <div class="fade-in">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-                    <h2 style="font-size:1.3rem;font-weight:700;">Review Answers</h2>
-                    <button class="btn btn-secondary btn-sm" onclick="App.goToView('home')">
-                        ← Home
-                    </button>
-                </div>
-                <div style="display:flex;flex-direction:column;gap:8px;">
-                    ${itemsHtml}
-                </div>
-            </div>
-        `;
-    },
-
-    // ===== Review Detail =====
-    reviewDetail(question, idx, userAnswer, onBack) {
-        const isCorrect = userAnswer === question.correct;
+    quiz(app, questions) {
+        const question = questions[app.currentQuestion];
+        const current = app.currentQuestion + 1;
+        const answer = app.selectedAnswers[app.currentQuestion];
+        const checked = app.checkedAnswers[app.currentQuestion];
+        const answeredCount = app.checkedAnswers.filter(Boolean).length;
+        const progress = questions.length ? answeredCount / questions.length * 100 : 0;
         const isPersian = /[\u0600-\u06FF]/.test(question.question);
-        const letters = isPersian ? ['الف', 'ب', 'ج', 'د', 'ه', 'و', 'ز', 'ح', 'ط', 'ی'] :
-            ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
-
-        let optionsHtml = question.options.map((opt, i) => {
-            let classes = 'review-detail-option';
-            if (i === question.correct) classes += ' correct-answer';
-            if (userAnswer === i && i !== question.correct) classes += ' user-wrong';
-
-            let label = '';
-            if (i === question.correct) label = ' ✓ (Correct)';
-            if (userAnswer === i && i !== question.correct) label = ' ✕ (Your answer)';
-
-            return `
-                <div class="${classes}">
-                    <span style="font-weight:600;">${letters[i] || (i+1)})</span> ${opt}
-                    <span style="font-weight:600;${i === question.correct ? 'color:var(--success)' : 'color:var(--danger)'}">${label}</span>
-                </div>
-            `;
+        const letters = isPersian ? ['الف', 'ب', 'ج', 'د', 'ه', 'و', 'ز', 'ح'] : ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+        const options = question.options.map((option, index) => {
+            const selected = answer === index ? ' selected' : '';
+            const correct = checked && index === question.correct ? ' correct' : '';
+            const wrong = checked && answer === index && answer !== question.correct ? ' wrong' : '';
+            const status = checked && index === question.correct ? '✓' :
+                checked && answer === index ? '✕' : '';
+            return `<button class="option-card${selected}${correct}${wrong}" onclick="App.toggleOption(${index})"
+                ${checked ? 'disabled' : ''} aria-pressed="${answer === index}">
+                <span class="option-letter">${this.escape(letters[index] || index + 1)}</span>
+                <span>${this.escape(option)}</span>
+                ${status ? `<span class="status-icon" aria-hidden="true">${status}</span>` : ''}
+            </button>`;
         }).join('');
+        const feedback = checked ? `<div class="feedback ${answer === question.correct ? 'correct' : 'incorrect'}" role="status">
+            <span class="icon">${answer === question.correct ? '✓' : '✕'}</span>
+            <div><strong>${answer === question.correct ? 'Correct!' : 'Incorrect'}</strong>
+            ${answer !== question.correct ? `<div>Correct answer: ${this.escape(letters[question.correct] || question.correct + 1)}</div>` : ''}
+            ${app.settings.showExplanations && question.explanation ? `<div class="explanation"><strong>Explanation:</strong><p>${this.escape(question.explanation)}</p></div>` : ''}</div>
+        </div>` : '';
 
-        const settings = Storage.getSettings();
-
-        return `
-            <div class="fade-in">
-                <button class="btn btn-secondary btn-sm" onclick="App.goToView('review')" style="margin-bottom:16px;">
-                    ← Back to all questions
-                </button>
-
-                <div class="card">
-                    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:16px;">
-                        <h3 style="font-size:1.1rem;font-weight:700;">Question ${idx + 1}</h3>
-                        <span style="padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;${isCorrect ? 'background:var(--success-light);color:var(--success)' : 'background:var(--danger-light);color:var(--danger)'}">
-                            ${isCorrect ? '✓ Correct' : '✕ Incorrect'}
-                        </span>
-                    </div>
-
-                    <p style="font-size:1.05rem;margin-bottom:16px;">${question.question}</p>
-
-                    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;">
-                        ${optionsHtml}
-                    </div>
-
-                    ${settings.showExplanations && question.explanation ? `
-                        <div style="border-top:1px solid var(--border-color);padding-top:16px;">
-                            <h4 style="font-weight:600;margin-bottom:8px;">Explanation</h4>
-                            <p style="color:var(--text-secondary);line-height:1.7;">${question.explanation}</p>
-                        </div>
-                    ` : ''}
+        return `<div class="quiz-layout fade-in">
+            <button class="navigator-open btn btn-secondary btn-sm" onclick="App.toggleNavigator()">☰ Questions</button>
+            ${this.navigator(app, questions)}
+            <main class="quiz-main">
+                <div class="quiz-header">
+                    <span class="title">${this.escape(question.category || 'Quiz')}</span>
+                    <span class="progress-text">Question ${current} of ${questions.length}</span>
+                    <span class="timer" data-timer>⏱ ${this.formatTime((Date.now() - app.startTime) / 1000)}</span>
                 </div>
-            </div>
-        `;
+                <div class="progress-bar-container" aria-label="${Math.round(progress)}% complete"><div class="fill" style="width:${progress}%"></div></div>
+                <section class="question-card" aria-labelledby="question-text">
+                    <div class="question-number">Question ${current} of ${questions.length}</div>
+                    ${question.category ? `<div class="category-tag">${this.escape(question.category)}</div>` : ''}
+                    <h2 id="question-text" class="question-text">${this.escape(question.question)}</h2>
+                    <div class="options-grid">${options}</div>
+                    ${feedback}
+                </section>
+                ${!checked ? `<div class="check-answer-container"><button class="btn btn-primary" onclick="App.checkAnswer()" ${answer === null ? 'disabled' : ''}>Check Answer</button></div>` : ''}
+                <div class="nav-buttons">
+                    <button class="btn btn-outline" onclick="App.previousQuestion()" ${app.currentQuestion === 0 ? 'disabled' : ''}>← Previous</button>
+                    <div class="right">
+                        <button class="btn btn-outline" onclick="App.goHome()">⌂ Home</button>
+                        ${checked ? `<button class="btn btn-primary" onclick="App.nextQuestion()">${current === questions.length ? 'Finish →' : 'Next →'}</button>` : ''}
+                    </div>
+                </div>
+            </main>
+        </div>`;
     },
 
-    // ===== Settings Modal =====
-    settingsModal(settings, onToggle, onReset) {
-        const renderToggle = (label, key, value) => `
-            <div class="settings-toggle">
-                <span>${label}</span>
-                <div class="toggle-track ${value ? 'active' : ''}" data-key="${key}" role="button" tabindex="0" aria-label="Toggle ${label}">
-                    <div class="toggle-thumb"></div>
-                </div>
+    results(results) {
+        return `<div class="card card-lg text-center fade-in results-card">
+            <div class="home-icon" aria-hidden="true">🎉</div><h2>Quiz Complete</h2>
+            <div class="result-number">${results.correct} / ${results.total}</div>
+            <div class="result-percent">${results.percentage}%</div>
+            <div class="stat-grid">
+                <div class="stat-item"><div class="number">${results.correct}</div><div class="label">Correct</div></div>
+                <div class="stat-item"><div class="number">${results.incorrect}</div><div class="label">Incorrect</div></div>
+                <div class="stat-item"><div class="number">${results.unanswered}</div><div class="label">Unanswered</div></div>
+                <div class="stat-item"><div class="number">${this.formatTime(results.timeTaken)}</div><div class="label">Time</div></div>
             </div>
-        `;
-
-        return `
-            <div class="modal">
-                <h2 class="modal-title">⚙️ Settings</h2>
-
-                <div style="display:flex;flex-direction:column;gap:12px;">
-                    ${renderToggle('Shuffle questions', 'shuffleQuestions', settings.shuffleQuestions)}
-                    ${renderToggle('Shuffle choices', 'shuffleChoices', settings.shuffleChoices)}
-                    ${renderToggle('Dark mode', 'darkMode', settings.darkMode)}
-                    ${renderToggle('Show explanations', 'showExplanations', settings.showExplanations)}
-
-                    <div style="border-top:1px solid var(--border-color);padding-top:16px;margin-top:4px;">
-                        <button class="btn btn-danger btn-block" onclick="if(confirm('Reset all saved progress? This action cannot be undone.')) { App.resetAllProgress(); }">
-                            🗑️ Reset saved progress
-                        </button>
-                    </div>
-                </div>
-
-                <button class="btn btn-secondary btn-block" onclick="App.closeSettings()" style="margin-top:16px;">
-                    Close
-                </button>
-            </div>
-        `;
+            <div class="result-actions"><button class="btn btn-primary btn-block" onclick="App.goToView('review')">Review Answers</button>
+            <button class="btn btn-secondary btn-block" onclick="App.restartQuiz()">Restart Quiz</button>
+            <button class="btn btn-outline btn-block" onclick="App.goHome()">Back to Home</button></div>
+        </div>`;
     },
 
-    // ===== Error =====
+    review(questions, answers) {
+        const items = questions.map((question, index) => {
+            const answer = answers[index];
+            const status = answer === null ? 'unanswered' : answer === question.correct ? 'correct' : 'incorrect';
+            return `<button class="review-item" onclick="App.showReviewDetail(${index})">
+                <span class="status ${status}">${status === 'correct' ? '✓' : status === 'incorrect' ? '✕' : '•'}</span>
+                <span class="q-text">${this.escape(question.question)}</span><span aria-hidden="true">→</span>
+            </button>`;
+        }).join('');
+        return `<div class="fade-in"><div class="review-header"><h2>Review Answers</h2><button class="btn btn-secondary btn-sm" onclick="App.goHome()">⌂ Home</button></div>${items}</div>`;
+    },
+
+    reviewDetail(question, index, answer) {
+        const correct = answer === question.correct;
+        const options = question.options.map((option, optionIndex) => {
+            const classes = optionIndex === question.correct ? ' correct-answer' :
+                optionIndex === answer ? ' user-wrong' : '';
+            return `<div class="review-detail-option${classes}"><strong>${optionIndex + 1})</strong> ${this.escape(option)}</div>`;
+        }).join('');
+        return `<div class="fade-in"><button class="btn btn-secondary btn-sm" onclick="App.goToView('review')">← Back to all questions</button>
+            <div class="card review-detail"><h2>Question ${index + 1} <span class="${correct ? 'review-correct' : 'review-incorrect'}">${correct ? '✓ Correct' : '✕ Incorrect'}</span></h2>
+            <p class="question-text">${this.escape(question.question)}</p>${options}
+            ${App.settings.showExplanations && question.explanation ? `<div class="explanation"><strong>Explanation:</strong><p>${this.escape(question.explanation)}</p></div>` : ''}</div></div>`;
+    },
+
+    settingsModal(settings) {
+        const toggle = (label, key) => `<div class="settings-toggle"><span>${label}</span><div class="toggle-track ${settings[key] ? 'active' : ''}" data-key="${key}" role="button" tabindex="0" aria-label="Toggle ${label}"><div class="toggle-thumb"></div></div></div>`;
+        return `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><h2 id="settings-title" class="modal-title">⚙️ Settings</h2>
+            ${toggle('Shuffle questions', 'shuffleQuestions')}${toggle('Shuffle choices', 'shuffleChoices')}${toggle('Dark mode', 'darkMode')}${toggle('Show explanations', 'showExplanations')}
+            <button class="btn btn-danger btn-block" onclick="if(confirm('Reset all saved progress?')) App.resetAllProgress()">🗑️ Reset saved progress</button>
+            <button class="btn btn-secondary btn-block" onclick="App.closeSettings()">Close</button></div>`;
+    },
+
     error(message) {
-        return `
-            <div class="card card-lg text-center" style="max-width:500px;margin:40px auto;border-color:var(--danger);">
-                <div style="font-size:3rem;margin-bottom:12px;">⚠️</div>
-                <h3 style="font-weight:700;margin-bottom:8px;">Error Loading Questions</h3>
-                <p style="color:var(--text-muted);">${message}</p>
-                <button class="btn btn-primary" onclick="location.reload()" style="margin-top:16px;">
-                    🔄 Retry
-                </button>
-            </div>
-        `;
+        return `<div class="card card-lg text-center error-card"><div class="home-icon">⚠️</div><h2>Unable to load questions</h2><p>${this.escape(message)}</p><button class="btn btn-primary" onclick="location.reload()">🔄 Retry</button></div>`;
     }
 };
 
